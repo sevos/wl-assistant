@@ -78,10 +78,63 @@ available_prompts() {
     printf '%s\n' "${matching_files[@]}"
 }
 
+select_prompt() {
+    local available_files
+    mapfile -t available_files < <(available_prompts)
+
+    # Return empty if no prompts available
+    if [[ ${#available_files[@]} -eq 0 ]]; then
+        return 1
+    fi
+
+    # If only one prompt available, return it directly
+    if [[ ${#available_files[@]} -eq 1 ]]; then
+        echo "${available_files[0]}"
+        return 0
+    fi
+
+    # Build fuzzel options using titles
+    local fuzzel_options=()
+    local file_map=()
+
+    for file in "${available_files[@]}"; do
+        local title=$(yq -r '.title // empty' "$file" 2>/dev/null)
+        
+        # Use filename if no title is defined
+        if [[ -z "$title" ]]; then
+            title=$(basename "$file" .yml)
+            title=$(basename "$title" .yaml)
+        fi
+
+        fuzzel_options+=("$title")
+        file_map+=("$file")
+    done
+
+    # Use fuzzel to select
+    local selected_index
+    local selected_display
+    selected_display=$(printf '%s\n' "${fuzzel_options[@]}" | fuzzel --dmenu)
+
+    # Find the index of selected option
+    for i in "${!fuzzel_options[@]}"; do
+        if [[ "${fuzzel_options[$i]}" == "$selected_display" ]]; then
+            selected_index=$i
+            break
+        fi
+    done
+
+    # Return the corresponding file path
+    if [[ -n "$selected_index" ]]; then
+        echo "${file_map[$selected_index]}"
+        return 0
+    else
+        return 1
+    fi
+}
+
 # Main execution
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     validate_dependencies || exit 1
     load_config
-    echo "$CURRENT_APP_ID"
-    echo "$CURRENT_WINDOW_TITLE"
+    select_prompt
 fi
