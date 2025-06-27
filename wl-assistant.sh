@@ -7,11 +7,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.yml"
 
 # Required binaries
-REQUIRED_BINARIES=("yq" "niri" "curl" "jq" "wl-copy" "wl-paste" "fuzzel")
+REQUIRED_BINARIES=("yq" "niri" "curl" "jq" "wl-copy" "wl-paste" "fuzzel" "waystt")
 
 # Global variables for current application context
 CURRENT_APP_ID=""
 CURRENT_WINDOW_TITLE=""
+
+# Background process management
+WAYSTT_PID=""
+WAYSTT_OUTPUT=""
+WAYSTT_TEMP_FILE=""
+SELECTED_PROMPT_FILE=""
 
 validate_dependencies() {
     local missing_binaries=()
@@ -29,6 +35,69 @@ validate_dependencies() {
     fi
     
     return 0
+}
+
+start_waystt() {
+    # Create temporary file for output
+    WAYSTT_TEMP_FILE=$(mktemp)
+    
+    # Start waystt in background and capture only stdout (transcription)
+    # stderr goes to /dev/null to avoid capturing debug messages
+    waystt 2>/dev/null > "$WAYSTT_TEMP_FILE" &
+    WAYSTT_PID=$!
+    
+    # Verify process started successfully
+    if ! kill -0 "$WAYSTT_PID" 2>/dev/null; then
+        echo "Error: Failed to start waystt" >&2
+        cleanup_waystt
+        return 1
+    fi
+    
+    return 0
+}
+
+stop_waystt() {
+    if [[ -n "$WAYSTT_PID" ]]; then
+        # Try graceful termination first
+        if kill -0 "$WAYSTT_PID" 2>/dev/null; then
+            kill "$WAYSTT_PID" 2>/dev/null
+            sleep 0.1
+            
+            # Force kill if still running
+            if kill -0 "$WAYSTT_PID" 2>/dev/null; then
+                kill -9 "$WAYSTT_PID" 2>/dev/null
+            fi
+        fi
+        WAYSTT_PID=""
+    fi
+}
+
+kill_waystt() {
+    if [[ -n "$WAYSTT_PID" ]]; then
+        # Force kill immediately
+        if kill -0 "$WAYSTT_PID" 2>/dev/null; then
+            kill -9 "$WAYSTT_PID" 2>/dev/null
+        fi
+        WAYSTT_PID=""
+    fi
+    
+    # Also kill any remaining waystt processes
+    pkill -9 waystt 2>/dev/null || true
+}
+
+capture_waystt_output() {
+    if [[ -n "$WAYSTT_TEMP_FILE" && -f "$WAYSTT_TEMP_FILE" ]]; then
+        WAYSTT_OUTPUT=$(cat "$WAYSTT_TEMP_FILE")
+    fi
+}
+
+cleanup_waystt() {
+    stop_waystt
+    if [[ -n "$WAYSTT_TEMP_FILE" && -f "$WAYSTT_TEMP_FILE" ]]; then
+        rm -f "$WAYSTT_TEMP_FILE"
+        WAYSTT_TEMP_FILE=""
+    fi
+    # Don't clear WAYSTT_OUTPUT here - we need it after cleanup
 }
 
 load_config() {
@@ -87,56 +156,118 @@ select_prompt() {
         return 1
     fi
 
-    # If only one prompt available, return it directly
-    if [[ ${#available_files[@]} -eq 1 ]]; then
-        echo "${available_files[0]}"
-        return 0
-    fi
-
-    # Build fuzzel options using titles
-    local fuzzel_options=()
-    local file_map=()
-
-    for file in "${available_files[@]}"; do
-        local title=$(yq -r '.title // empty' "$file" 2>/dev/null)
-        
-        # Use filename if no title is defined
-        if [[ -z "$title" ]]; then
-            title=$(basename "$file" .yml)
-            title=$(basename "$title" .yaml)
-        fi
-
-        fuzzel_options+=("$title")
-        file_map+=("$file")
-    done
-
-    # Always add Cancel as the last option
-    fuzzel_options+=("Cancel")
-
-    # Use fuzzel to select
-    local selected_display
-    selected_display=$(printf '%s\n' "${fuzzel_options[@]}" | fuzzel --dmenu)
-
-    # Handle Cancel selection or no selection
-    if [[ -z "$selected_display" || "$selected_display" == "Cancel" ]]; then
+    # Start waystt in background before showing selection
+    if ! start_waystt; then
+        echo "Error: Could not start waystt" >&2
         return 1
     fi
 
-    # Find the index of selected option
-    for i in "${!file_map[@]}"; do
-        if [[ "${fuzzel_options[$i]}" == "$selected_display" ]]; then
-            echo "${file_map[$i]}"
-            return 0
-        fi
-    done
+    local selected_prompt_file=""
 
-    # If we get here, something went wrong
-    return 1
+    # If only one prompt available, use it directly (but still do transcription)
+    if [[ ${#available_files[@]} -eq 1 ]]; then
+        selected_prompt_file="${available_files[0]}"
+    else
+        # Build fuzzel options using titles
+        local fuzzel_options=()
+        local file_map=()
+
+        for file in "${available_files[@]}"; do
+            local title=$(yq -r '.title // empty' "$file" 2>/dev/null)
+            
+            # Use filename if no title is defined
+            if [[ -z "$title" ]]; then
+                title=$(basename "$file" .yml)
+                title=$(basename "$title" .yaml)
+            fi
+
+            fuzzel_options+=("$title")
+            file_map+=("$file")
+        done
+
+        # Always add Cancel as the last option
+        fuzzel_options+=("Cancel")
+
+        # Use fuzzel to select
+        local selected_display
+        selected_display=$(printf '%s\n' "${fuzzel_options[@]}" | fuzzel --dmenu)
+
+        # Handle Cancel selection or no selection
+        if [[ -z "$selected_display" || "$selected_display" == "Cancel" ]]; then
+            # Kill waystt process on cancel
+            kill_waystt
+            cleanup_waystt
+            return 1
+        fi
+
+        # Find the selected prompt file
+        for i in "${!file_map[@]}"; do
+            if [[ "${fuzzel_options[$i]}" == "$selected_display" ]]; then
+                selected_prompt_file="${file_map[$i]}"
+                break
+            fi
+        done
+
+        if [[ -z "$selected_prompt_file" ]]; then
+            cleanup_waystt
+            return 1
+        fi
+    fi
+
+    # Trigger waystt transcription by sending USR1 signal
+    if [[ -n "$WAYSTT_PID" ]] && kill -0 "$WAYSTT_PID" 2>/dev/null; then
+        kill -USR1 "$WAYSTT_PID"
+        
+        # Wait for waystt process to exit (up to 10 seconds)
+        local timeout=10
+        local elapsed=0
+        while [[ $elapsed -lt $timeout ]]; do
+            if ! kill -0 "$WAYSTT_PID" 2>/dev/null; then
+                # Process has exited, give it a moment to flush output
+                sleep 0.2
+                
+                # Capture output
+                capture_waystt_output
+                break
+            fi
+            sleep 0.5
+            elapsed=$((elapsed + 1))
+        done
+        
+        # If process still running after timeout, assume error and kill it
+        if kill -0 "$WAYSTT_PID" 2>/dev/null; then
+            echo "Error: waystt transcription timed out" >&2
+            kill_waystt
+            cleanup_waystt
+            return 1
+        fi
+    else
+        echo "Error: waystt process not running" >&2
+        cleanup_waystt
+        return 1
+    fi
+
+    # Clean up (process should already be stopped)
+    cleanup_waystt
+
+    # Set the global variable
+    SELECTED_PROMPT_FILE="$selected_prompt_file"
+    return 0
 }
 
 # Main execution
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     validate_dependencies || exit 1
     load_config
+    
     select_prompt
+    exit_code=$?
+    
+    if [[ $exit_code -eq 0 ]]; then
+        echo "Selected prompt: $SELECTED_PROMPT_FILE"
+        echo "Transcription output:"
+        echo "$WAYSTT_OUTPUT"
+    else
+        echo "No prompt selected or error occurred"
+    fi
 fi
