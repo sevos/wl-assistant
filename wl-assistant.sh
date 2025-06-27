@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.yml"
 
 # Required binaries
-REQUIRED_BINARIES=("yq" "niri" "curl" "jq" "wl-copy" "wl-paste" "fuzzel" "waystt")
+REQUIRED_BINARIES=("yq" "niri" "curl" "jq" "wl-copy" "wl-paste" "fuzzel" "waystt" "ydotool")
 
 # Global variables for current application context
 CURRENT_APP_ID=""
@@ -291,6 +291,28 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
             echo "Paste action triggered"
             echo "Transcription output:"
             echo "$WAYSTT_OUTPUT"
+            
+            # Copy transcription to clipboard and emulate Ctrl+V
+            if [[ -n "$WAYSTT_OUTPUT" ]]; then
+                # Copy to clipboard using wl-copy
+                echo -n "$WAYSTT_OUTPUT" | wl-copy &
+                wl_copy_pid=$!
+                
+                # Give wl-copy a moment to set the clipboard
+                sleep 0.05
+                
+                # Emulate Ctrl+V press using ydotool
+                \ydotool key 29:1 47:1 47:0 29:0
+                
+                # Kill wl-copy process
+                if kill -0 "$wl_copy_pid" 2>/dev/null; then
+                    kill -9 "$wl_copy_pid" 2>/dev/null
+                fi
+                
+                echo "Text pasted successfully"
+            else
+                echo "No transcription to paste"
+            fi
         fi
     else
         # Error occurred
