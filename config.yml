@@ -1,0 +1,3 @@
+current:
+  app_id: niri msg focused-window | grep "App ID" | awk -F'"' '{print $2}' 
+  title: niri msg focused-window | grep "Title" | awk -F'"' '{print $2}'

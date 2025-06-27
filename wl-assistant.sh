@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# WL-Assistant - Wayland AI Assistant
+# Modular helper script for context-aware text generation
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/config.yml"
+
+# Required binaries
+REQUIRED_BINARIES=("yq" "niri" "curl" "jq" "wl-copy" "wl-paste" "fuzzel")
+
+# Global variables for current application context
+CURRENT_APP_ID=""
+CURRENT_WINDOW_TITLE=""
+
+validate_dependencies() {
+    local missing_binaries=()
+    
+    for binary in "${REQUIRED_BINARIES[@]}"; do
+        if ! command -v "$binary" &> /dev/null; then
+            missing_binaries+=("$binary")
+        fi
+    done
+    
+    if [[ ${#missing_binaries[@]} -ne 0 ]]; then
+        echo "Error: Missing required binaries: ${missing_binaries[*]}" >&2
+        echo "Please install the missing dependencies and try again." >&2
+        return 1
+    fi
+    
+    return 0
+}
+
+load_config() {
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        echo "Error: config.yml not found in $SCRIPT_DIR" >&2
+        return 1
+    fi
+
+    # Extract commands from config.yml
+    local app_id_cmd=$(yq -r '.current.app_id' "$CONFIG_FILE")
+    local title_cmd=$(yq -r '.current.title' "$CONFIG_FILE")
+
+    if [[ "$app_id_cmd" == "null" || "$title_cmd" == "null" ]]; then
+        echo "Error: Invalid configuration in config.yml" >&2
+        return 1
+    fi
+
+    # Execute commands and set global variables
+    CURRENT_APP_ID=$(eval "$app_id_cmd" 2>/dev/null)
+    CURRENT_WINDOW_TITLE=$(eval "$title_cmd" 2>/dev/null)
+
+    # Handle empty results
+    CURRENT_APP_ID="${CURRENT_APP_ID:-unknown}"
+    CURRENT_WINDOW_TITLE="${CURRENT_WINDOW_TITLE:-unknown}"
+}
+
+# Main execution
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    validate_dependencies || exit 1
+    load_config
+    echo "$CURRENT_APP_ID"
+    echo "$CURRENT_WINDOW_TITLE"
+fi
