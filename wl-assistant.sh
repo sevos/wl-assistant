@@ -110,26 +110,28 @@ select_prompt() {
         file_map+=("$file")
     done
 
+    # Always add Cancel as the last option
+    fuzzel_options+=("Cancel")
+
     # Use fuzzel to select
-    local selected_index
     local selected_display
     selected_display=$(printf '%s\n' "${fuzzel_options[@]}" | fuzzel --dmenu)
 
+    # Handle Cancel selection or no selection
+    if [[ -z "$selected_display" || "$selected_display" == "Cancel" ]]; then
+        return 1
+    fi
+
     # Find the index of selected option
-    for i in "${!fuzzel_options[@]}"; do
+    for i in "${!file_map[@]}"; do
         if [[ "${fuzzel_options[$i]}" == "$selected_display" ]]; then
-            selected_index=$i
-            break
+            echo "${file_map[$i]}"
+            return 0
         fi
     done
 
-    # Return the corresponding file path
-    if [[ -n "$selected_index" ]]; then
-        echo "${file_map[$selected_index]}"
-        return 0
-    else
-        return 1
-    fi
+    # If we get here, something went wrong
+    return 1
 }
 
 # Main execution
