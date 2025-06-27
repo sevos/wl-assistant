@@ -55,6 +55,29 @@ load_config() {
     CURRENT_WINDOW_TITLE="${CURRENT_WINDOW_TITLE:-unknown}"
 }
 
+available_prompts() {
+    local prompts_dir="$SCRIPT_DIR/prompts"
+    local matching_files=()
+
+    if [[ ! -d "$prompts_dir" ]]; then
+        return 0
+    fi
+
+    # Find all YAML files in prompts directory
+    for file in "$prompts_dir"/*.yml "$prompts_dir"/*.yaml; do
+        if [[ -f "$file" ]]; then
+            # Check if the file has an app_id key that matches current app ID
+            local file_id=$(yq -r '.app_id // empty' "$file" 2>/dev/null)
+            if [[ "$file_id" == "$CURRENT_APP_ID" ]]; then
+                matching_files+=("$file")
+            fi
+        fi
+    done
+
+    # Output matching file paths
+    printf '%s\n' "${matching_files[@]}"
+}
+
 # Main execution
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     validate_dependencies || exit 1
