@@ -227,11 +227,18 @@ select_prompt() {
 }
 
 call_llm() {
-    local prompt="$1"
+    local system_prompt="$1"
+    local prompt="$2"
+    local custom_model="$3"
     local api_key="${OPENAI_API_KEY}"
     
     if [[ -z "$api_key" ]]; then
         echo "Error: OPENAI_API_KEY environment variable is not set" >&2
+        return 1
+    fi
+    
+    if [[ -z "$system_prompt" ]]; then
+        echo "Error: No system prompt provided" >&2
         return 1
     fi
     
@@ -240,13 +247,24 @@ call_llm() {
         return 1
     fi
     
-    # Get API URL and model from config
+    # Get API URL from config
     local api_url=$(yq -r '.llm.api_url' "$CONFIG_FILE")
-    local model=$(yq -r '.llm.default_model' "$CONFIG_FILE")
     
-    if [[ "$api_url" == "null" || "$model" == "null" ]]; then
-        echo "Error: LLM configuration not found in config.yml" >&2
+    if [[ "$api_url" == "null" ]]; then
+        echo "Error: LLM API URL not found in config.yml" >&2
         return 1
+    fi
+    
+    # Use custom model if provided, otherwise get default from config
+    local model
+    if [[ -n "$custom_model" ]]; then
+        model="$custom_model"
+    else
+        model=$(yq -r '.llm.default_model' "$CONFIG_FILE")
+        if [[ "$model" == "null" ]]; then
+            echo "Error: Default model not found in config.yml and no custom model provided" >&2
+            return 1
+        fi
     fi
     
     local response
@@ -256,6 +274,10 @@ call_llm() {
         -d "{
             \"model\": \"$model\",
             \"messages\": [
+                {
+                    \"role\": \"system\",
+                    \"content\": \"$system_prompt\"
+                },
                 {
                     \"role\": \"user\",
                     \"content\": \"$prompt\"
