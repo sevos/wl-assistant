@@ -101,6 +101,51 @@ cleanup_waystt() {
     # Don't clear WAYSTT_OUTPUT here - we need it after cleanup
 }
 
+paste_text() {
+    local text="$1"
+    local paste_combination="$2"
+    
+    if [[ -z "$text" ]]; then
+        echo "Error: No text to paste" >&2
+        return 1
+    fi
+    
+    # Default to Ctrl+V if no combination specified
+    if [[ -z "$paste_combination" ]]; then
+        paste_combination="Ctrl+V"
+    fi
+    
+    # Copy to clipboard using wl-copy
+    echo -n "$text" | wl-copy &
+    wl_copy_pid=$!
+    
+    # Give wl-copy a moment to set the clipboard
+    sleep 0.05
+    
+    # Emulate key combination using ydotool
+    case "$paste_combination" in
+        "Ctrl+V")
+            # Ctrl+V: Ctrl(29) + V(47)
+            \ydotool key 29:1 47:1 47:0 29:0
+            ;;
+        "Ctrl+Shift+V")
+            # Ctrl+Shift+V: Ctrl(29) + Shift(42) + V(47)
+            \ydotool key 29:1 42:1 47:1 47:0 42:0 29:0
+            ;;
+        *)
+            echo "Warning: Unknown paste combination '$paste_combination', using Ctrl+V" >&2
+            \ydotool key 29:1 47:1 47:0 29:0
+            ;;
+    esac
+    
+    # Kill wl-copy process
+    if kill -0 "$wl_copy_pid" 2>/dev/null; then
+        kill -9 "$wl_copy_pid" 2>/dev/null
+    fi
+    
+    return 0
+}
+
 load_config() {
     if [[ ! -f "$CONFIG_FILE" ]]; then
         echo "Error: config.yml not found in $SCRIPT_DIR" >&2
@@ -389,7 +434,16 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
                     
                     if [[ $? -eq 0 && -n "$llm_response" ]]; then
                         echo "LLM processing completed successfully"
-                        # LLM response is stored in llm_response variable for further processing
+                        
+                        # Get paste combination from YAML file
+                        paste_combination=$(yq -r '.paste_with // "Ctrl+V"' "$SELECTED_PROMPT_FILE")
+                        
+                        echo "Pasting LLM response using $paste_combination..."
+                        if paste_text "$llm_response" "$paste_combination"; then
+                            echo "LLM response pasted successfully"
+                        else
+                            echo "Error: Failed to paste LLM response" >&2
+                        fi
                     else
                         echo "Error: Failed to get response from LLM" >&2
                     fi
@@ -402,24 +456,13 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
             echo "Transcription output:"
             echo "$WAYSTT_OUTPUT"
             
-            # Copy transcription to clipboard and emulate Ctrl+V
+            # Paste transcription using default Ctrl+V
             if [[ -n "$WAYSTT_OUTPUT" ]]; then
-                # Copy to clipboard using wl-copy
-                echo -n "$WAYSTT_OUTPUT" | wl-copy &
-                wl_copy_pid=$!
-                
-                # Give wl-copy a moment to set the clipboard
-                sleep 0.05
-                
-                # Emulate Ctrl+V press using ydotool
-                \ydotool key 29:1 47:1 47:0 29:0
-                
-                # Kill wl-copy process
-                if kill -0 "$wl_copy_pid" 2>/dev/null; then
-                    kill -9 "$wl_copy_pid" 2>/dev/null
+                if paste_text "$WAYSTT_OUTPUT" "Ctrl+V"; then
+                    echo "Text pasted successfully"
+                else
+                    echo "Error: Failed to paste text" >&2
                 fi
-                
-                echo "Text pasted successfully"
             else
                 echo "No transcription to paste"
             fi
