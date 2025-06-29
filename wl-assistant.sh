@@ -101,6 +101,22 @@ cleanup_waystt() {
     # Don't clear WAYSTT_OUTPUT here - we need it after cleanup
 }
 
+play_success_beep() {
+    # Play C-E-G triad beep (261.63Hz, 329.63Hz, 392.00Hz) - approximately 200ms total
+    # Using ffplay to generate sine wave tones
+    if command -v ffplay &> /dev/null; then
+        # Play each note for ~67ms to total ~200ms
+        (ffplay -f lavfi -i "sine=frequency=261.63:duration=0.067" -autoexit -nodisp -loglevel quiet 2>/dev/null &
+         sleep 0.067
+         ffplay -f lavfi -i "sine=frequency=329.63:duration=0.067" -autoexit -nodisp -loglevel quiet 2>/dev/null &
+         sleep 0.067
+         ffplay -f lavfi -i "sine=frequency=392.00:duration=0.067" -autoexit -nodisp -loglevel quiet 2>/dev/null &) &
+    else
+        # Fallback to system bell if ffplay is not available
+        printf '\a' 2>/dev/null || true
+    fi
+}
+
 paste_text() {
     local text="$1"
     local paste_combination="$2"
@@ -146,6 +162,9 @@ paste_text() {
     if kill -0 "$wl_copy_pid" 2>/dev/null; then
         kill -9 "$wl_copy_pid" 2>/dev/null
     fi
+    
+    # Play success beep after successful paste
+    play_success_beep
     
     return 0
 }
