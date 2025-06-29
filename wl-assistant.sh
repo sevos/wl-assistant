@@ -267,25 +267,33 @@ call_llm() {
         fi
     fi
     
+    # Create JSON payload with proper escaping
+    local json_payload
+    json_payload=$(jq -n \
+        --arg model "$model" \
+        --arg system_content "$system_prompt" \
+        --arg user_content "$prompt" \
+        '{
+            model: $model,
+            messages: [
+                {
+                    role: "system",
+                    content: $system_content
+                },
+                {
+                    role: "user", 
+                    content: $user_content
+                }
+            ],
+            max_tokens: 1000,
+            temperature: 0.7
+        }')
+    
     local response
     response=$(curl -s -X POST "$api_url" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $api_key" \
-        -d "{
-            \"model\": \"$model\",
-            \"messages\": [
-                {
-                    \"role\": \"system\",
-                    \"content\": \"$system_prompt\"
-                },
-                {
-                    \"role\": \"user\",
-                    \"content\": \"$prompt\"
-                }
-            ],
-            \"max_tokens\": 1000,
-            \"temperature\": 0.7
-        }")
+        -d "$json_payload")
     
     if [[ $? -ne 0 ]]; then
         echo "Error: Failed to call LLM API" >&2
@@ -367,6 +375,28 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
             echo "Selected prompt: $SELECTED_PROMPT_FILE"
             echo "Transcription output:"
             echo "$WAYSTT_OUTPUT"
+            
+            # Process the prompt with LLM
+            if [[ -n "$SELECTED_PROMPT_FILE" && -n "$WAYSTT_OUTPUT" ]]; then
+                # Extract system prompt from the YAML file
+                system_prompt=$(yq -r '.prompt // empty' "$SELECTED_PROMPT_FILE")
+                
+                if [[ -n "$system_prompt" ]]; then
+                    echo "Processing with LLM..."
+                    
+                    # Call LLM with system prompt and transcription
+                    llm_response=$(call_llm "$system_prompt" "$WAYSTT_OUTPUT")
+                    
+                    if [[ $? -eq 0 && -n "$llm_response" ]]; then
+                        echo "LLM processing completed successfully"
+                        # LLM response is stored in llm_response variable for further processing
+                    else
+                        echo "Error: Failed to get response from LLM" >&2
+                    fi
+                else
+                    echo "Warning: No prompt found in $SELECTED_PROMPT_FILE" >&2
+                fi
+            fi
         elif [[ $exit_code -eq 2 ]]; then
             echo "Paste action triggered"
             echo "Transcription output:"

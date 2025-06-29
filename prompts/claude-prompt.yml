@@ -1,6 +1,7 @@
 ---
 title: Claude Prompt
 app_id: Alacritty
+paste_with: Ctrl+Shift+V
 prompt: |
   # Role
 
