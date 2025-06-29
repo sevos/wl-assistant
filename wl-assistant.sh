@@ -226,6 +226,64 @@ select_prompt() {
     return 0  # Prompt selected
 }
 
+call_llm() {
+    local prompt="$1"
+    local api_key="${OPENAI_API_KEY}"
+    
+    if [[ -z "$api_key" ]]; then
+        echo "Error: OPENAI_API_KEY environment variable is not set" >&2
+        return 1
+    fi
+    
+    if [[ -z "$prompt" ]]; then
+        echo "Error: No prompt provided" >&2
+        return 1
+    fi
+    
+    # Get API URL and model from config
+    local api_url=$(yq -r '.llm.api_url' "$CONFIG_FILE")
+    local model=$(yq -r '.llm.default_model' "$CONFIG_FILE")
+    
+    if [[ "$api_url" == "null" || "$model" == "null" ]]; then
+        echo "Error: LLM configuration not found in config.yml" >&2
+        return 1
+    fi
+    
+    local response
+    response=$(curl -s -X POST "$api_url" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $api_key" \
+        -d "{
+            \"model\": \"$model\",
+            \"messages\": [
+                {
+                    \"role\": \"user\",
+                    \"content\": \"$prompt\"
+                }
+            ],
+            \"max_tokens\": 1000,
+            \"temperature\": 0.7
+        }")
+    
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Failed to call LLM API" >&2
+        return 1
+    fi
+    
+    # Extract content from response
+    local content
+    content=$(echo "$response" | jq -r '.choices[0].message.content // empty')
+    
+    if [[ -z "$content" ]]; then
+        echo "Error: Empty response from LLM API" >&2
+        echo "API Response: $response" >&2
+        return 1
+    fi
+    
+    echo "$content"
+    return 0
+}
+
 # Main execution
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     validate_dependencies || exit 1

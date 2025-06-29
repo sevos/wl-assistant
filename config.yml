@@ -1,3 +1,7 @@
 current:
   app_id: niri msg focused-window | grep "App ID" | awk -F'"' '{print $2}' 
   title: niri msg focused-window | grep "Title" | awk -F'"' '{print $2}'
+
+llm:
+  api_url: "https://api.openai.com/v1/chat/completions"
+  default_model: "gpt-4.1-mini"
