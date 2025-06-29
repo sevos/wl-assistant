@@ -163,9 +163,58 @@ paste_text() {
         kill -9 "$wl_copy_pid" 2>/dev/null
     fi
     
-    # Play success beep after successful paste
-    play_success_beep
+    return 0
+}
+
+paste_sentences() {
+    local text="$1"
+    local paste_combination="$2"
     
+    if [[ -z "$text" ]]; then
+        echo "Error: No text to paste" >&2
+        return 1
+    fi
+    
+    # Split text into sentences using period as delimiter, preserving whitespace
+    local sentences=()
+    local temp_text="$text"
+    
+    # Replace periods followed by space(s) with period + unique delimiter + space(s)
+    # This preserves the original whitespace after periods
+    temp_text=$(echo "$text" | sed 's/\.\([[:space:]]\+\)/.|SENTENCE_BREAK|\1/g' | sed 's/\.$/.|SENTENCE_BREAK|/')
+    
+    # Split on the delimiter and populate array
+    IFS='|SENTENCE_BREAK|' read -ra sentences <<< "$temp_text"
+    
+    # Get sentence delay from config (default 0.5 seconds between sentences)
+    local sentence_delay=$(yq -r '.timeouts.sentence_delay // 0.5' "$CONFIG_FILE")
+    
+    # Paste each sentence individually
+    local sentence_count=0
+    for sentence in "${sentences[@]}"; do
+        # Skip empty sentences
+        if [[ -n "$sentence" && "$sentence" != " " ]]; then
+            # Don't trim whitespace - preserve original formatting
+            if [[ -n "$sentence" ]]; then
+                echo "Pasting sentence $((sentence_count + 1)): ${sentence:0:50}..."
+                
+                # Paste the sentence using paste_text function
+                if ! paste_text "$sentence" "$paste_combination"; then
+                    echo "Error: Failed to paste sentence $((sentence_count + 1))" >&2
+                    return 1
+                fi
+                
+                sentence_count=$((sentence_count + 1))
+                
+                # Wait between sentences (except for the last one)
+                if [[ $sentence_count -lt ${#sentences[@]} ]]; then
+                    sleep "$sentence_delay"
+                fi
+            fi
+        fi
+    done
+    
+    echo "Successfully pasted $sentence_count sentences"
     return 0
 }
 
@@ -563,11 +612,25 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
                         # Get paste combination from YAML file
                         paste_combination=$(yq -r '.paste_with // "Ctrl+V"' "$SELECTED_PROMPT_FILE")
                         
-                        echo "Pasting LLM response using $paste_combination..."
-                        if paste_text "$llm_response" "$paste_combination"; then
-                            echo "LLM response pasted successfully"
+                        # Get paste_sentences setting from YAML file
+                        paste_sentences_enabled=$(yq -r '.paste_sentences // false' "$SELECTED_PROMPT_FILE")
+                        
+                        if [[ "$paste_sentences_enabled" == "true" ]]; then
+                            echo "Pasting LLM response sentence by sentence using $paste_combination..."
+                            if paste_sentences "$llm_response" "$paste_combination"; then
+                                echo "LLM response pasted successfully"
+                                play_success_beep
+                            else
+                                echo "Error: Failed to paste LLM response" >&2
+                            fi
                         else
-                            echo "Error: Failed to paste LLM response" >&2
+                            echo "Pasting LLM response using $paste_combination..."
+                            if paste_text "$llm_response" "$paste_combination"; then
+                                echo "LLM response pasted successfully"
+                                play_success_beep
+                            else
+                                echo "Error: Failed to paste LLM response" >&2
+                            fi
                         fi
                     else
                         echo "Error: Failed to get response from LLM" >&2
@@ -585,6 +648,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
             if [[ -n "$WAYSTT_OUTPUT" ]]; then
                 if paste_text "$WAYSTT_OUTPUT" "Ctrl+V"; then
                     echo "Text pasted successfully"
+                    play_success_beep
                 else
                     echo "Error: Failed to paste text" >&2
                 fi
