@@ -366,6 +366,40 @@ call_llm() {
     return 0
 }
 
+evaluate_commands_in_prompt() {
+    local prompt="$1"
+    
+    if [[ -z "$prompt" ]]; then
+        echo "$prompt"
+        return 0
+    fi
+    
+    # Use a while loop to find and replace all command patterns
+    local result="$prompt"
+    local temp_result
+    
+    while [[ "$result" =~ \`([^\`]+)\` ]]; do
+        local full_match="${BASH_REMATCH[0]}"
+        local command="${BASH_REMATCH[1]}"
+        
+        # Execute the command and capture output
+        local command_output
+        if command_output=$(eval "$command" 2>/dev/null); then
+            # Remove trailing newlines from command output
+            command_output="${command_output%$'\n'}"
+            # Replace the backtick expression with the command output
+            result="${result/$full_match/$command_output}"
+        else
+            # If command fails, leave the original backtick expression
+            echo "Warning: Failed to evaluate command: $command" >&2
+            break
+        fi
+    done
+    
+    echo "$result"
+    return 0
+}
+
 # Main execution
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     validate_dependencies || exit 1
@@ -434,6 +468,9 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
                 system_prompt=$(yq -r '.prompt // empty' "$SELECTED_PROMPT_FILE")
                 
                 if [[ -n "$system_prompt" ]]; then
+                    # Evaluate commands in backticks within the system prompt
+                    system_prompt=$(evaluate_commands_in_prompt "$system_prompt")
+                    
                     echo "Processing with LLM..."
                     
                     # Extract custom model from YAML file if specified
