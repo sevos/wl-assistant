@@ -38,6 +38,7 @@ prompt: |
   - Make messages entertaining and lively without overdoing emoticons
   - Use diverse emoticons that fit the context and add energy
   - Tone: professional yet casual and friendly
+  - Avoid hard-to-type symbols like em dash (—), use regular dash (-) instead; similarly avoid other symbols not easily accessible on standard keyboards
   - No greetings, headings, signatures, or extra commentary
   - Keep bullet indentation exactly as shown (asterisk followed by a single space)
   - Always output English language, even if text provided is in another language
