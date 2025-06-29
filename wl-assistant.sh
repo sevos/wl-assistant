@@ -366,6 +366,56 @@ call_llm() {
     return 0
 }
 
+call_claude_code() {
+    local system_prompt="$1"
+    local prompt="$2"
+    local custom_model="$3"
+    
+    if [[ -z "$system_prompt" ]]; then
+        echo "Error: No system prompt provided" >&2
+        return 1
+    fi
+    
+    if [[ -z "$prompt" ]]; then
+        echo "Error: No prompt provided" >&2
+        return 1
+    fi
+    
+    if [[ -z "$custom_model" ]]; then
+        echo "Error: No custom model provided" >&2
+        return 1
+    fi
+    
+    # Extract Claude model (remove claude_code: prefix)
+    local claude_model="${custom_model#claude_code:}"
+    
+    if [[ -z "$claude_model" ]]; then
+        echo "Error: Invalid claude_code model format" >&2
+        return 1
+    fi
+    
+    # Combine prompts with double newline separator
+    local combined_prompt="SYSTEM:\n$system_prompt\n\nUSER:\n$prompt"
+    
+    # Call Claude CLI with -p flag for non-interactive output
+    local response
+    response=$(claude -p --model "$claude_model" "$combined_prompt" 2>&1)
+    
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Failed to call Claude Code CLI" >&2
+        echo "Claude response: $response" >&2
+        return 1
+    fi
+    
+    if [[ -z "$response" ]]; then
+        echo "Error: Empty response from Claude Code CLI" >&2
+        return 1
+    fi
+    
+    echo "$response"
+    return 0
+}
+
 evaluate_commands_in_prompt() {
     local prompt="$1"
     
@@ -478,7 +528,12 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
                     
                     # Call LLM with system prompt, transcription, and optional custom model
                     if [[ -n "$custom_model" ]]; then
-                        llm_response=$(call_llm "$system_prompt" "$WAYSTT_OUTPUT" "$custom_model")
+                        # Check if model uses Claude Code integration
+                        if [[ "$custom_model" == claude_code:* ]]; then
+                            llm_response=$(call_claude_code "$system_prompt" "$WAYSTT_OUTPUT" "$custom_model")
+                        else
+                            llm_response=$(call_llm "$system_prompt" "$WAYSTT_OUTPUT" "$custom_model")
+                        fi
                     else
                         llm_response=$(call_llm "$system_prompt" "$WAYSTT_OUTPUT")
                     fi
