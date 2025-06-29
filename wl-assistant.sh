@@ -102,15 +102,15 @@ cleanup_waystt() {
 }
 
 play_success_beep() {
-    # Play C-E-G triad beep (261.63Hz, 329.63Hz, 392.00Hz) - approximately 200ms total
+    # Play C-E-G triad beep (261.63Hz, 329.63Hz, 392.00Hz) - approximately 450ms total
     # Using ffplay to generate sine wave tones
     if command -v ffplay &> /dev/null; then
-        # Play each note for ~67ms to total ~200ms
-        (ffplay -f lavfi -i "sine=frequency=261.63:duration=0.067" -autoexit -nodisp -loglevel quiet 2>/dev/null &
-         sleep 0.067
-         ffplay -f lavfi -i "sine=frequency=329.63:duration=0.067" -autoexit -nodisp -loglevel quiet 2>/dev/null &
-         sleep 0.067
-         ffplay -f lavfi -i "sine=frequency=392.00:duration=0.067" -autoexit -nodisp -loglevel quiet 2>/dev/null &) &
+        # Play each note for ~150ms to total ~450ms
+        (ffplay -f lavfi -i "sine=frequency=261.63:duration=0.150" -autoexit -nodisp -loglevel quiet 2>/dev/null &
+         sleep 0.150
+         ffplay -f lavfi -i "sine=frequency=329.63:duration=0.150" -autoexit -nodisp -loglevel quiet 2>/dev/null &
+         sleep 0.150
+         ffplay -f lavfi -i "sine=frequency=392.00:duration=0.150" -autoexit -nodisp -loglevel quiet 2>/dev/null &) &
     else
         # Fallback to system bell if ffplay is not available
         printf '\a' 2>/dev/null || true

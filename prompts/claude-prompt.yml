@@ -2,7 +2,7 @@
 title: Claude Prompt
 app_id: Alacritty
 paste_with: Ctrl+Shift+V
-model: claude_code:sonnet
+model: gpt-4.1-mini
 prompt: |
   # Role
 
