@@ -120,15 +120,19 @@ paste_text() {
     wl_copy_pid=$!
     
     # Give wl-copy a moment to set the clipboard
-    sleep 0.05
+    local clipboard_delay=$(yq -r '.timeouts.clipboard // 0.05' "$CONFIG_FILE")
+    sleep "$clipboard_delay"
+    
+    # Convert to uppercase for case-insensitive comparison
+    local paste_upper="${paste_combination^^}"
     
     # Emulate key combination using ydotool
-    case "$paste_combination" in
-        "Ctrl+V")
+    case "$paste_upper" in
+        "CTRL+V")
             # Ctrl+V: Ctrl(29) + V(47)
             \ydotool key 29:1 47:1 47:0 29:0
             ;;
-        "Ctrl+Shift+V")
+        "CTRL+SHIFT+V")
             # Ctrl+Shift+V: Ctrl(29) + Shift(42) + V(47)
             \ydotool key 29:1 42:1 47:1 47:0 42:0 29:0
             ;;
@@ -335,7 +339,10 @@ call_llm() {
         }')
     
     local response
-    response=$(curl -s -X POST "$api_url" \
+    # Get timeout from config
+    local timeout=$(yq -r '.llm.timeout // 20' "$CONFIG_FILE")
+    
+    response=$(curl -s --max-time "$timeout" -X POST "$api_url" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $api_key" \
         -d "$json_payload")
@@ -384,8 +391,8 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         if [[ -n "$WAYSTT_PID" ]] && kill -0 "$WAYSTT_PID" 2>/dev/null; then
             kill -USR1 "$WAYSTT_PID"
             
-            # Wait for waystt process to exit (up to 10 seconds)
-            max_wait=10
+            # Get transcription timeout from config
+            max_wait=$(yq -r '.timeouts.transcription // 30' "$CONFIG_FILE")
             elapsed=0
             while [[ $elapsed -lt $max_wait ]]; do
                 if ! kill -0 "$WAYSTT_PID" 2>/dev/null; then
@@ -429,8 +436,15 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
                 if [[ -n "$system_prompt" ]]; then
                     echo "Processing with LLM..."
                     
-                    # Call LLM with system prompt and transcription
-                    llm_response=$(call_llm "$system_prompt" "$WAYSTT_OUTPUT")
+                    # Extract custom model from YAML file if specified
+                    custom_model=$(yq -r '.model // empty' "$SELECTED_PROMPT_FILE")
+                    
+                    # Call LLM with system prompt, transcription, and optional custom model
+                    if [[ -n "$custom_model" ]]; then
+                        llm_response=$(call_llm "$system_prompt" "$WAYSTT_OUTPUT" "$custom_model")
+                    else
+                        llm_response=$(call_llm "$system_prompt" "$WAYSTT_OUTPUT")
+                    fi
                     
                     if [[ $? -eq 0 && -n "$llm_response" ]]; then
                         echo "LLM processing completed successfully"

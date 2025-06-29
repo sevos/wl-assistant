@@ -5,3 +5,8 @@ current:
 llm:
   api_url: "https://api.openai.com/v1/chat/completions"
   default_model: "gpt-4.1-mini"
+  timeout: 20
+
+timeouts:
+  transcription: 30
+  clipboard: 0.05
