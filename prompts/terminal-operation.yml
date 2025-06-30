@@ -1,6 +1,6 @@
 ---
 title: Terminal Operation
-app_id: Alacritty
+app_id: kitty
 paste_with: Ctrl+Shift+V
 model: gpt-4.1-mini
 prompt: |
