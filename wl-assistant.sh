@@ -177,14 +177,27 @@ paste_sentences() {
     
     # Split text into sentences using period as delimiter, preserving whitespace
     local sentences=()
-    local temp_text="$text"
     
-    # Replace periods followed by space(s) with period + unique delimiter + space(s)
-    # This preserves the original whitespace after periods
-    temp_text=$(echo "$text" | sed 's/\.\([[:space:]]\+\)/.|SENTENCE_BREAK|\1/g' | sed 's/\.$/.|SENTENCE_BREAK|/')
-    
-    # Split on the delimiter and populate array
-    IFS='|SENTENCE_BREAK|' read -ra sentences <<< "$temp_text"
+    # Use a more robust approach to split sentences while preserving periods and whitespace
+    # This regex captures: (sentence ending with period)(whitespace)
+    # and creates an array where each element is a complete sentence with its period
+    local remaining_text="$text"
+    while [[ -n "$remaining_text" ]]; do
+        # Match sentence ending with period followed by whitespace, or remaining text at end
+        if [[ "$remaining_text" =~ ^([^.]*\.[[:space:]]+)(.*)$ ]]; then
+            # Found a sentence with period and trailing space(s)
+            sentences+=("${BASH_REMATCH[1]}")
+            remaining_text="${BASH_REMATCH[2]}"
+        elif [[ "$remaining_text" =~ ^([^.]*\.)$ ]]; then
+            # Found final sentence ending with period but no trailing space
+            sentences+=("${BASH_REMATCH[1]}")
+            remaining_text=""
+        else
+            # No more periods found - add remaining text as final sentence
+            sentences+=("$remaining_text")
+            remaining_text=""
+        fi
+    done
     
     # Get sentence delay from config (default 0.5 seconds between sentences)
     local sentence_delay=$(yq -r '.timeouts.sentence_delay // 0.5' "$CONFIG_FILE")
