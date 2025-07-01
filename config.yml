@@ -10,3 +10,8 @@ llm:
 timeouts:
   transcription: 30
   clipboard: 0.05
+  sentence_delay: 0.5
+
+generic_paste:
+  paste_with: "Ctrl+V"
+  paste_sentences: false

@@ -657,13 +657,30 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
             echo "Transcription output:"
             echo "$WAYSTT_OUTPUT"
             
-            # Paste transcription using default Ctrl+V
+            # Paste transcription using generic paste configuration
             if [[ -n "$WAYSTT_OUTPUT" ]]; then
-                if paste_text "$WAYSTT_OUTPUT" "Ctrl+V"; then
-                    echo "Text pasted successfully"
-                    play_success_beep
+                # Get paste combination from config
+                paste_combination=$(yq -r '.generic_paste.paste_with // "Ctrl+V"' "$CONFIG_FILE")
+                
+                # Get paste_sentences setting from config
+                paste_sentences_enabled=$(yq -r '.generic_paste.paste_sentences // false' "$CONFIG_FILE")
+                
+                if [[ "$paste_sentences_enabled" == "true" ]]; then
+                    echo "Pasting transcription sentence by sentence using $paste_combination..."
+                    if paste_sentences "$WAYSTT_OUTPUT" "$paste_combination"; then
+                        echo "Text pasted successfully"
+                        play_success_beep
+                    else
+                        echo "Error: Failed to paste text" >&2
+                    fi
                 else
-                    echo "Error: Failed to paste text" >&2
+                    echo "Pasting transcription using $paste_combination..."
+                    if paste_text "$WAYSTT_OUTPUT" "$paste_combination"; then
+                        echo "Text pasted successfully"
+                        play_success_beep
+                    else
+                        echo "Error: Failed to paste text" >&2
+                    fi
                 fi
             else
                 echo "No transcription to paste"
