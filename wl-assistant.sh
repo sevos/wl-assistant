@@ -231,6 +231,27 @@ paste_sentences() {
     return 0
 }
 
+load_universal_system_prompt() {
+    local system_prompt_file="$SCRIPT_DIR/system-prompt.md"
+    
+    if [[ ! -f "$system_prompt_file" ]]; then
+        echo "Error: system-prompt.md not found in $SCRIPT_DIR" >&2
+        return 1
+    fi
+    
+    # Read the entire file content
+    local universal_prompt
+    universal_prompt=$(cat "$system_prompt_file")
+    
+    if [[ -z "$universal_prompt" ]]; then
+        echo "Error: system-prompt.md is empty" >&2
+        return 1
+    fi
+    
+    echo "$universal_prompt"
+    return 0
+}
+
 load_config() {
     if [[ ! -f "$CONFIG_FILE" ]]; then
         echo "Error: config.yml not found in $SCRIPT_DIR" >&2
@@ -357,7 +378,7 @@ select_prompt() {
 }
 
 call_llm() {
-    local system_prompt="$1"
+    local user_prompt="$1"
     local prompt="$2"
     local custom_model="$3"
     local api_key="${OPENAI_API_KEY}"
@@ -367,8 +388,8 @@ call_llm() {
         return 1
     fi
     
-    if [[ -z "$system_prompt" ]]; then
-        echo "Error: No system prompt provided" >&2
+    if [[ -z "$user_prompt" ]]; then
+        echo "Error: No user prompt provided" >&2
         return 1
     fi
     
@@ -376,6 +397,22 @@ call_llm() {
         echo "Error: No prompt provided" >&2
         return 1
     fi
+    
+    # Load universal system prompt from system-prompt.md
+    local system_prompt
+    system_prompt=$(load_universal_system_prompt)
+    
+    if [[ $? -ne 0 || -z "$system_prompt" ]]; then
+        echo "Error: Failed to load universal system prompt" >&2
+        return 1
+    fi
+    
+    # Combine system prompt with user-selected prompt
+    local combined_system_prompt="${system_prompt}
+
+---
+
+${user_prompt}"
     
     # Get API URL from config
     local api_url=$(yq -r '.llm.api_url' "$CONFIG_FILE")
@@ -401,7 +438,7 @@ call_llm() {
     local json_payload
     json_payload=$(jq -n \
         --arg model "$model" \
-        --arg system_content "$system_prompt" \
+        --arg system_content "$combined_system_prompt" \
         --arg user_content "$prompt" \
         '{
             model: $model,
