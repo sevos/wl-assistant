@@ -25,6 +25,8 @@ prompt: |
   - Preserve all specific details, names, numbers, and technical terms
   - Keep the message length similar to the original
   - Use natural, conversational American English
-  - Avoid hard-to-type symbols like em dash (—), use regular dash (-) instead; similarly avoid other symbols not easily accessible on standard keyboards
+  - Use ONLY these allowed non-letter characters: . , ; : ! ? " ' ( ) [ ] { } < > / \ | @ # $ % ^ & * + = _ - ~ ` 
+  - Do NOT use any other special characters, symbols, or Unicode characters not listed above
+  - When you need punctuation, choose from the allowed list only
   - No greetings, signatures, or extra commentary
   - If the original message is already good American English, make only minimal improvements
