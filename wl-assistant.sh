@@ -2,12 +2,13 @@
 
 # WL-Assistant - Wayland AI Assistant
 # Modular helper script for context-aware text generation
+# Supports Hyprland window compositor
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.yml"
 
 # Required binaries
-REQUIRED_BINARIES=("yq" "niri" "curl" "jq" "wl-copy" "wl-paste" "walker" "waystt" "ydotool")
+REQUIRED_BINARIES=("yq" "hyprctl" "curl" "jq" "wl-copy" "wl-paste" "walker" "waystt" "ydotool")
 
 # Global variables for current application context
 CURRENT_APP_ID=""
@@ -316,7 +317,7 @@ select_prompt() {
         local walker_options=("Paste (Ctrl+V)" "Cancel")
         
         local selected_display
-        selected_display=$(printf '%s\n' "${walker_options[@]}" | walker -m dmenu)
+        selected_display=$(printf '%s\n' "${walker_options[@]}" | walker --dmenu)
         
         # Handle Cancel selection or no selection
         if [[ -z "$selected_display" || "$selected_display" == "Cancel" ]]; then
@@ -353,7 +354,7 @@ select_prompt() {
 
     # Use walker to select
     local selected_display
-    selected_display=$(printf '%s\n' "${walker_options[@]}" | walker -m dmenu)
+    selected_display=$(printf '%s\n' "${walker_options[@]}" | walker --dmenu)
 
     # Handle Cancel selection or no selection
     if [[ -z "$selected_display" || "$selected_display" == "Cancel" ]]; then

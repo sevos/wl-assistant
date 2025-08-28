@@ -1,6 +1,6 @@
 current:
-  app_id: niri msg focused-window | grep "App ID" | awk -F'"' '{print $2}' 
-  title: niri msg focused-window | grep "Title" | awk -F'"' '{print $2}'
+  app_id: hyprctl -j activewindow | jq -r '.class'
+  title: hyprctl -j activewindow | jq -r '.title'
 
 llm:
   api_url: "https://api.openai.com/v1/chat/completions"
