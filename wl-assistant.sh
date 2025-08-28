@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.yml"
 
 # Required binaries
-REQUIRED_BINARIES=("yq" "niri" "curl" "jq" "wl-copy" "wl-paste" "fuzzel" "waystt" "ydotool")
+REQUIRED_BINARIES=("yq" "niri" "curl" "jq" "wl-copy" "wl-paste" "walker" "waystt" "ydotool")
 
 # Global variables for current application context
 CURRENT_APP_ID=""
@@ -313,10 +313,10 @@ select_prompt() {
     # Handle case when no prompts are available
     if [[ ${#available_files[@]} -eq 0 ]]; then
         # Show paste option and cancel when no prompts available
-        local fuzzel_options=("Paste (Ctrl+V)" "Cancel")
+        local walker_options=("Paste (Ctrl+V)" "Cancel")
         
         local selected_display
-        selected_display=$(printf '%s\n' "${fuzzel_options[@]}" | fuzzel --dmenu)
+        selected_display=$(printf '%s\n' "${walker_options[@]}" | walker -m dmenu)
         
         # Handle Cancel selection or no selection
         if [[ -z "$selected_display" || "$selected_display" == "Cancel" ]]; then
@@ -331,8 +331,8 @@ select_prompt() {
         return 1  # Default to cancel
     fi
 
-    # Build fuzzel options using titles for all available prompts
-    local fuzzel_options=()
+    # Build walker options using titles for all available prompts
+    local walker_options=()
     local file_map=()
 
     for file in "${available_files[@]}"; do
@@ -344,16 +344,16 @@ select_prompt() {
             title=$(basename "$title" .yaml)
         fi
 
-        fuzzel_options+=("$title")
+        walker_options+=("$title")
         file_map+=("$file")
     done
 
     # Always add Cancel as the last option
-    fuzzel_options+=("Cancel")
+    walker_options+=("Cancel")
 
-    # Use fuzzel to select
+    # Use walker to select
     local selected_display
-    selected_display=$(printf '%s\n' "${fuzzel_options[@]}" | fuzzel --dmenu)
+    selected_display=$(printf '%s\n' "${walker_options[@]}" | walker -m dmenu)
 
     # Handle Cancel selection or no selection
     if [[ -z "$selected_display" || "$selected_display" == "Cancel" ]]; then
@@ -362,7 +362,7 @@ select_prompt() {
 
     # Find the selected prompt file
     for i in "${!file_map[@]}"; do
-        if [[ "${fuzzel_options[$i]}" == "$selected_display" ]]; then
+        if [[ "${walker_options[$i]}" == "$selected_display" ]]; then
             selected_prompt_file="${file_map[$i]}"
             break
         fi
