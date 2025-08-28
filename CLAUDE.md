@@ -45,7 +45,7 @@ Application-specific prompts defined in YAML:
 ```yaml
 applications:
   - name: "terminal"
-    window_class: "kitty"
+    window_class: "Alacritty"
     prompts:
       - name: "explain_command"
         description: "Explain the last command output"

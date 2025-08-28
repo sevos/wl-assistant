@@ -1,6 +1,6 @@
 ---
 title: Claude Prompt
-app_id: kitty
+app_id: Alacritty
 paste_with: Ctrl+Shift+V
 paste_sentences: true
 model: gpt-4.1-mini
